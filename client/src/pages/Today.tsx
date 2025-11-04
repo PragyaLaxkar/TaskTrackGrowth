@@ -29,6 +29,7 @@ export default function Today() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
     onError: () => {
       toast({
@@ -48,6 +49,7 @@ export default function Today() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
     onError: () => {
       toast({
@@ -64,6 +66,7 @@ export default function Today() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
     onError: () => {
       toast({

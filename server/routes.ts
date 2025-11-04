@@ -35,7 +35,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/tasks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const task = await storage.updateTask(id, req.body);
+      
+      // Validate partial updates
+      const allowedFields = ['completed', 'completedAt', 'title', 'description'];
+      const updates: Record<string, unknown> = {};
+      
+      for (const key of Object.keys(req.body)) {
+        if (allowedFields.includes(key)) {
+          updates[key] = req.body[key];
+        }
+      }
+      
+      const task = await storage.updateTask(id, updates);
       
       if (!task) {
         return res.status(404).json({ error: "Task not found" });

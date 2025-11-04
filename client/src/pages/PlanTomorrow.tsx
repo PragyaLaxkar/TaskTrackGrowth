@@ -29,6 +29,7 @@ export default function PlanTomorrow() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", tomorrow] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
     onError: () => {
       toast({
@@ -45,6 +46,7 @@ export default function PlanTomorrow() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", tomorrow] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
     onError: () => {
       toast({
@@ -126,7 +128,8 @@ export default function PlanTomorrow() {
                     id={task.id}
                     title={task.title}
                     description={task.description ?? undefined}
-                    completed={false}
+                    completed={task.completed}
+                    completedAt={task.completedAt ? new Date(task.completedAt) : undefined}
                     onToggle={() => {}}
                     onDelete={handleDeleteTask}
                   />
