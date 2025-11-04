@@ -1,70 +1,92 @@
-import { useState } from "react";
 import { format } from "date-fns";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import TaskItem from "@/components/TaskItem";
 import AddTaskForm from "@/components/AddTaskForm";
 import StatCard from "@/components/StatCard";
 import { CheckCircle2, Flame, Calendar as CalendarIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-//todo: remove mock functionality
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  completedAt?: Date;
-}
+import { useToast } from "@/hooks/use-toast";
+import type { Task } from "@shared/schema";
 
 export default function Today() {
-  //todo: remove mock functionality
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: "1",
-      title: "Morning workout",
-      description: "30 minutes cardio",
-      completed: false,
+  const { toast } = useToast();
+  const today = format(new Date(), "yyyy-MM-dd");
+
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+    queryKey: ["/api/tasks", today],
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: { title: string; description?: string }) => {
+      return apiRequest("POST", `/api/tasks`, {
+        title: data.title,
+        description: data.description,
+        date: today,
+        completed: false,
+      });
     },
-    {
-      id: "2",
-      title: "Read for 30 minutes",
-      completed: true,
-      completedAt: new Date(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
     },
-    {
-      id: "3",
-      title: "Work on side project",
-      description: "2 hours of focused work",
-      completed: false,
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create task",
+        variant: "destructive",
+      });
     },
-  ]);
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: async ({ id, completed }: { id: string; completed: boolean }) => {
+      return apiRequest("PATCH", `/api/tasks/${id}`, {
+        completed,
+        completedAt: completed ? new Date().toISOString() : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update task",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/tasks/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete task",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToggleTask = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              completed: !task.completed,
-              completedAt: !task.completed ? new Date() : undefined,
-            }
-          : task
-      )
-    );
+    const task = tasks.find((t) => t.id === id);
+    if (task) {
+      updateTaskMutation.mutate({ id, completed: !task.completed });
+    }
   };
 
   const handleDeleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
+    deleteTaskMutation.mutate(id);
   };
 
   const handleAddTask = (title: string, description?: string) => {
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title,
-      description,
-      completed: false,
-    };
-    setTasks((prev) => [...prev, newTask]);
+    createTaskMutation.mutate({ title, description });
   };
 
   const activeTasks = tasks.filter((t) => !t.completed);
@@ -72,6 +94,14 @@ export default function Today() {
   const completionRate = tasks.length > 0 
     ? Math.round((completedTasks.length / tasks.length) * 100)
     : 0;
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading tasks...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -116,7 +146,11 @@ export default function Today() {
                 activeTasks.map((task) => (
                   <TaskItem
                     key={task.id}
-                    {...task}
+                    id={task.id}
+                    title={task.title}
+                    description={task.description ?? undefined}
+                    completed={task.completed}
+                    completedAt={task.completedAt ? new Date(task.completedAt) : undefined}
                     onToggle={handleToggleTask}
                     onDelete={handleDeleteTask}
                   />
@@ -145,7 +179,11 @@ export default function Today() {
                   {completedTasks.map((task) => (
                     <TaskItem
                       key={task.id}
-                      {...task}
+                      id={task.id}
+                      title={task.title}
+                      description={task.description ?? undefined}
+                      completed={task.completed}
+                      completedAt={task.completedAt ? new Date(task.completedAt) : undefined}
                       onToggle={handleToggleTask}
                       onDelete={handleDeleteTask}
                     />

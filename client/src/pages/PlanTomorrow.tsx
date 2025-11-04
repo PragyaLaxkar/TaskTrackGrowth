@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { format, addDays } from "date-fns";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import AddTaskForm from "@/components/AddTaskForm";
 import TaskItem from "@/components/TaskItem";
 import { Button } from "@/components/ui/button";
@@ -7,50 +8,77 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-//todo: remove mock functionality
-interface PlannedTask {
-  id: string;
-  title: string;
-  description?: string;
-}
+import type { Task } from "@shared/schema";
 
 export default function PlanTomorrow() {
   const { toast } = useToast();
-  //todo: remove mock functionality
-  const [plannedTasks, setPlannedTasks] = useState<PlannedTask[]>([
-    {
-      id: "1",
-      title: "Morning meditation",
-      description: "15 minutes",
+  const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
+
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+    queryKey: ["/api/tasks", tomorrow],
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: { title: string; description?: string }) => {
+      return apiRequest("POST", `/api/tasks`, {
+        title: data.title,
+        description: data.description,
+        date: tomorrow,
+        completed: false,
+      });
     },
-    {
-      id: "2",
-      title: "Review weekly goals",
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", tomorrow] });
     },
-  ]);
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create task",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/tasks/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", tomorrow] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete task",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleAddTask = (title: string, description?: string) => {
-    const newTask: PlannedTask = {
-      id: Date.now().toString(),
-      title,
-      description,
-    };
-    setPlannedTasks((prev) => [...prev, newTask]);
+    createTaskMutation.mutate({ title, description });
   };
 
   const handleDeleteTask = (id: string) => {
-    setPlannedTasks((prev) => prev.filter((task) => task.id !== id));
+    deleteTaskMutation.mutate(id);
   };
 
   const handleCommitPlan = () => {
     toast({
       title: "Plan saved!",
-      description: `${plannedTasks.length} tasks scheduled for tomorrow.`,
+      description: `${tasks.length} tasks scheduled for tomorrow.`,
     });
   };
 
   const tomorrowDate = addDays(new Date(), 1);
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading tasks...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -67,7 +95,7 @@ export default function PlanTomorrow() {
               Prepare your tasks for {format(tomorrowDate, "EEEE")}
             </p>
           </div>
-          {plannedTasks.length > 0 && (
+          {tasks.length > 0 && (
             <Button onClick={handleCommitPlan} data-testid="button-commit-plan">
               <Sparkles className="h-4 w-4 mr-2" />
               Commit Plan
@@ -85,17 +113,19 @@ export default function PlanTomorrow() {
             />
           </div>
 
-          {plannedTasks.length > 0 ? (
+          {tasks.length > 0 ? (
             <div>
               <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" data-testid="text-section-title">
                 <Calendar className="h-5 w-5" />
-                Tomorrow's Tasks ({plannedTasks.length})
+                Tomorrow's Tasks ({tasks.length})
               </h2>
               <div className="space-y-3">
-                {plannedTasks.map((task) => (
+                {tasks.map((task) => (
                   <TaskItem
                     key={task.id}
-                    {...task}
+                    id={task.id}
+                    title={task.title}
+                    description={task.description ?? undefined}
                     completed={false}
                     onToggle={() => {}}
                     onDelete={handleDeleteTask}

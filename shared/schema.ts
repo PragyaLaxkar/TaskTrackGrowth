@@ -29,6 +29,10 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 
 export const insertDailyStatsSchema = createInsertSchema(dailyStats).omit({
   id: true,
+}).required({
+  totalTasks: true,
+  completedTasks: true,
+  completionRate: true,
 });
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;

@@ -1,36 +1,55 @@
 import { subDays, format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 import ProgressChart from "@/components/ProgressChart";
 import CalendarHeatmap from "@/components/CalendarHeatmap";
 import StatCard from "@/components/StatCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrendingUp, Target, Award, Zap } from "lucide-react";
+import type { DailyStats } from "@shared/schema";
 
 export default function Progress() {
-  //todo: remove mock functionality
-  const mockChartData = Array.from({ length: 14 }, (_, i) => {
-    const date = subDays(new Date(), 13 - i);
-    const completedTasks = Math.floor(Math.random() * 8) + 2;
-    const totalTasks = 10;
-    return {
-      date: format(date, "yyyy-MM-dd"),
-      completionRate: Math.round((completedTasks / totalTasks) * 100),
-      totalTasks,
-      completedTasks,
-    };
+  const startDate = format(subDays(new Date(), 29), "yyyy-MM-dd");
+  const endDate = format(new Date(), "yyyy-MM-dd");
+  
+  const chartStartDate = format(subDays(new Date(), 13), "yyyy-MM-dd");
+
+  const { data: allStats = [], isLoading: isLoadingAll } = useQuery<DailyStats[]>({
+    queryKey: ["/api/stats/range", startDate, endDate],
+    queryFn: () => fetch(`/api/stats/range/${startDate}/${endDate}`).then(res => res.json()),
   });
 
-  //todo: remove mock functionality
-  const mockHeatmapData = Array.from({ length: 30 }, (_, i) => {
-    const date = subDays(new Date(), 29 - i);
-    const completedTasks = Math.floor(Math.random() * 10);
-    const totalTasks = 10;
-    return {
-      date: format(date, "yyyy-MM-dd"),
-      completionRate: Math.round((completedTasks / totalTasks) * 100),
-      totalTasks,
-      completedTasks,
-    };
+  const { data: chartStats = [], isLoading: isLoadingChart } = useQuery<DailyStats[]>({
+    queryKey: ["/api/stats/range", chartStartDate, endDate],
+    queryFn: () => fetch(`/api/stats/range/${chartStartDate}/${endDate}`).then(res => res.json()),
   });
+
+  const chartData = chartStats.map(stat => ({
+    date: stat.date,
+    completionRate: stat.completionRate,
+    totalTasks: stat.totalTasks,
+    completedTasks: stat.completedTasks,
+  }));
+
+  const heatmapData = allStats.map(stat => ({
+    date: stat.date,
+    completionRate: stat.completionRate,
+    totalTasks: stat.totalTasks,
+    completedTasks: stat.completedTasks,
+  }));
+
+  const totalCompleted = allStats.reduce((sum, stat) => sum + stat.completedTasks, 0);
+  const avgCompletionRate = allStats.length > 0
+    ? Math.round(allStats.reduce((sum, stat) => sum + stat.completionRate, 0) / allStats.length)
+    : 0;
+  const perfectDays = allStats.filter(stat => stat.completionRate === 100).length;
+
+  if (isLoadingAll || isLoadingChart) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading progress data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -48,33 +67,33 @@ export default function Progress() {
           <div className="grid gap-6 md:grid-cols-4">
             <StatCard
               title="Total Completed"
-              value="156"
-              description="All time"
+              value={totalCompleted}
+              description="Last 30 days"
               icon={Award}
             />
             <StatCard
-              title="Longest Streak"
-              value="14 days"
-              description="Your best"
+              title="Perfect Days"
+              value={perfectDays}
+              description="100% completion"
               icon={Zap}
             />
             <StatCard
               title="Average Rate"
-              value="82%"
+              value={`${avgCompletionRate}%`}
               description="Last 30 days"
               icon={TrendingUp}
             />
             <StatCard
-              title="Perfect Days"
-              value="12"
-              description="This month"
+              title="Active Days"
+              value={allStats.filter(s => s.totalTasks > 0).length}
+              description="With tasks"
               icon={Target}
             />
           </div>
 
-          <ProgressChart data={mockChartData} title="Last 14 Days" />
+          <ProgressChart data={chartData} title="Last 14 Days" />
 
-          <CalendarHeatmap data={mockHeatmapData} />
+          <CalendarHeatmap data={heatmapData} />
 
           <div className="grid gap-6 md:grid-cols-2">
             <div className="p-6 border rounded-lg bg-card" data-testid="card-insights">
@@ -83,36 +102,41 @@ export default function Progress() {
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-chart-2 mt-1.5" />
                   <p className="text-muted-foreground">
-                    You're most consistent on <span className="text-foreground font-medium">Mondays</span>
+                    You've completed{" "}
+                    <span className="text-foreground font-medium">{totalCompleted} tasks</span> in
+                    the last 30 days
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-chart-1 mt-1.5" />
                   <p className="text-muted-foreground">
-                    Your completion rate improved by{" "}
-                    <span className="text-foreground font-medium">15%</span> this week
+                    Average completion rate of{" "}
+                    <span className="text-foreground font-medium">{avgCompletionRate}%</span>
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 rounded-full bg-chart-4 mt-1.5" />
                   <p className="text-muted-foreground">
-                    Keep going! You're <span className="text-foreground font-medium">2 days</span> away from
-                    your longest streak
+                    You've had{" "}
+                    <span className="text-foreground font-medium">{perfectDays} perfect days</span> this
+                    month
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="p-6 border rounded-lg bg-card" data-testid="card-milestones">
-              <h3 className="text-lg font-semibold mb-4">Milestones</h3>
+              <h3 className="text-lg font-semibold mb-4">Keep Going!</h3>
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-full bg-chart-2/20 flex items-center justify-center">
                     <Award className="h-6 w-6 text-chart-2" />
                   </div>
                   <div>
-                    <p className="font-medium">7-Day Streak</p>
-                    <p className="text-sm text-muted-foreground">Achieved 3 times</p>
+                    <p className="font-medium">Stay Consistent</p>
+                    <p className="text-sm text-muted-foreground">
+                      Build daily habits that last
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -120,8 +144,10 @@ export default function Progress() {
                     <Target className="h-6 w-6 text-chart-1" />
                   </div>
                   <div>
-                    <p className="font-medium">100% Week</p>
-                    <p className="text-sm text-muted-foreground">Achieved 2 times</p>
+                    <p className="font-medium">Track Progress</p>
+                    <p className="text-sm text-muted-foreground">
+                      Every completed task counts
+                    </p>
                   </div>
                 </div>
               </div>
