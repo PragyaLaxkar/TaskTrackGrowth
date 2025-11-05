@@ -20,14 +20,18 @@ export default function Today() {
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: { title: string; description?: string }) => {
-      return apiRequest("POST", `/api/tasks`, {
+      const res = await apiRequest("POST", `/api/tasks`, {
         title: data.title,
         description: data.description,
         date: today,
         completed: false,
       });
+      return (await res.json()) as Task;
     },
-    onSuccess: () => {
+    onSuccess: (newTask) => {
+      queryClient.setQueryData<Task[] | undefined>(["/api/tasks", today], (prev) => {
+        return prev ? [...prev, newTask] : [newTask];
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
@@ -42,21 +46,43 @@ export default function Today() {
 
   const updateTaskMutation = useMutation({
     mutationFn: async ({ id, completed }: { id: string; completed: boolean }) => {
-      return apiRequest("PATCH", `/api/tasks/${id}`, {
+      const res = await apiRequest("PATCH", `/api/tasks/${id}`, {
         completed,
         completedAt: completed ? new Date().toISOString() : null,
       });
+      return (await res.json()) as Task;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
+    onMutate: async ({ id, completed }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks", today] });
+      const previous = queryClient.getQueryData<Task[] | undefined>(["/api/tasks", today]);
+      if (previous) {
+        const nowIso = new Date().toISOString();
+        const next = previous.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                completed,
+                completedAt: completed ? (nowIso as unknown as Date) : null,
+              }
+            : t
+        );
+        queryClient.setQueryData(["/api/tasks", today], next);
+      }
+      return { previous } as { previous?: Task[] };
     },
-    onError: () => {
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["/api/tasks", today], ctx.previous);
+      }
       toast({
         title: "Error",
         description: "Failed to update task",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", today] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/range"] });
     },
   });
 

@@ -1,17 +1,40 @@
-import { subDays, format } from "date-fns";
+import { subDays, subMonths, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import ProgressChart from "@/components/ProgressChart";
 import CalendarHeatmap from "@/components/CalendarHeatmap";
 import StatCard from "@/components/StatCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TrendingUp, Target, Award, Zap } from "lucide-react";
+import { TrendingUp, Target, Award, Zap, Calendar as CalendarIcon } from "lucide-react";
 import type { DailyStats } from "@shared/schema";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
 
 export default function Progress() {
-  const startDate = format(subDays(new Date(), 29), "yyyy-MM-dd");
-  const endDate = format(new Date(), "yyyy-MM-dd");
-  
-  const chartStartDate = format(subDays(new Date(), 13), "yyyy-MM-dd");
+  const [preset, setPreset] = useState<string>("30d");
+  const [range, setRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 29),
+    to: new Date(),
+  });
+
+  const computed = useMemo(() => {
+    const to = range?.to ?? range?.from ?? new Date();
+    if (preset === "custom") {
+      const from = range?.from ?? to;
+      return { from, to };
+    }
+    if (preset === "15d") return { from: subDays(to, 14), to };
+    if (preset === "30d") return { from: subDays(to, 29), to };
+    if (preset === "2mo") return { from: subMonths(to, 2), to };
+    if (preset === "1yr") return { from: subMonths(to, 12), to };
+    return { from: subDays(to, 29), to };
+  }, [preset, range]);
+
+  const startDate = format(computed.from, "yyyy-MM-dd");
+  const endDate = format(computed.to, "yyyy-MM-dd");
 
   const { data: allStats = [], isLoading: isLoadingAll } = useQuery<DailyStats[]>({
     queryKey: ["/api/stats/range", startDate, endDate],
@@ -19,8 +42,8 @@ export default function Progress() {
   });
 
   const { data: chartStats = [], isLoading: isLoadingChart } = useQuery<DailyStats[]>({
-    queryKey: ["/api/stats/range", chartStartDate, endDate],
-    queryFn: () => fetch(`/api/stats/range/${chartStartDate}/${endDate}`).then(res => res.json()),
+    queryKey: ["/api/stats/range", startDate, endDate, "chart"],
+    queryFn: () => fetch(`/api/stats/range/${startDate}/${endDate}`).then(res => res.json()),
   });
 
   const chartData = chartStats.map(stat => ({
@@ -64,11 +87,46 @@ export default function Progress() {
 
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-8">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <Select value={preset} onValueChange={setPreset}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15d">Last 15 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="2mo">Last 2 months</SelectItem>
+                  <SelectItem value="1yr">Last 1 year</SelectItem>
+                  <SelectItem value="custom">Custom…</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start w-[260px]">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {computed.from && computed.to
+                      ? `${format(computed.from, "LLL d, yyyy")} - ${format(computed.to, "LLL d, yyyy")}`
+                      : "Pick a date range"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    numberOfMonths={2}
+                    selected={range}
+                    onSelect={setRange}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
           <div className="grid gap-6 md:grid-cols-4">
             <StatCard
               title="Total Completed"
               value={totalCompleted}
-              description="Last 30 days"
+              description="Selected range"
               icon={Award}
             />
             <StatCard
@@ -80,7 +138,7 @@ export default function Progress() {
             <StatCard
               title="Average Rate"
               value={`${avgCompletionRate}%`}
-              description="Last 30 days"
+              description="Selected range"
               icon={TrendingUp}
             />
             <StatCard
@@ -91,7 +149,7 @@ export default function Progress() {
             />
           </div>
 
-          <ProgressChart data={chartData} title="Last 14 Days" />
+          <ProgressChart data={chartData} title="Completion over time" />
 
           <CalendarHeatmap data={heatmapData} />
 

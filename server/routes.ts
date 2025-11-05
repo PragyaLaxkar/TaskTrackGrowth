@@ -34,7 +34,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/tasks/:id", async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id.trim();
       
       // Validate partial updates
       const allowedFields = ['completed', 'completedAt', 'title', 'description'];
@@ -60,7 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/tasks/:id", async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id.trim();
       const deleted = await storage.deleteTask(id);
       
       if (!deleted) {
